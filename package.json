@@ -1,0 +1,12 @@
+{
+  "name": "modern-chat-app",
+  "version": "1.0.0",
+  "description": "A modern group chat application",
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node api/index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.0.0"
+  }
+}
