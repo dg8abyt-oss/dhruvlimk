@@ -86,6 +86,51 @@ module.exports = async (req, res) => {
             return res.status(500).json({ error: 'Internal server error' });
           }
 
+          // Send notification to all users in the group
+          const { data: users, error: usersError } = await supabase
+            .from('group_members')
+            .select('user_id')
+            .eq('group_id', groupId);
+
+          if (usersError) {
+            console.error('Error fetching group members:', usersError);
+          } else {
+            // Get all user tokens
+            const userIds = users.map(user => user.user_id);
+            const { data: tokens, error: tokensError } = await supabase
+              .from('user_tokens')
+              .select('token')
+              .in('user_id', userIds);
+
+            if (tokensError) {
+              console.error('Error fetching user tokens:', tokensError);
+            } else {
+              // Send notification to each token
+              const notificationPromises = tokens.map(tokenObj => {
+                return fetch('https://fcm.googleapis.com/fcm/send', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `key=${process.env.FIREBASE_SERVER_KEY}`
+                  },
+                  body: JSON.stringify({
+                    to: tokenObj.token,
+                    notification: {
+                      title: `New message from ${sender}`,
+                      body: message,
+                      icon: '/icons/icon-192x192.png'
+                    },
+                    data: {
+                      groupId: groupId.toString()
+                    }
+                  })
+                });
+              });
+
+              await Promise.all(notificationPromises);
+            }
+          }
+
           return res.status(200).json({ data });
         } catch (err) {
           console.error('Error parsing request body:', err);
@@ -246,10 +291,20 @@ module.exports = async (req, res) => {
 
     req.on('end', async () => {
       try {
-        const { token } = JSON.parse(body);
+        const { token, userId } = JSON.parse(body);
 
-        if (!token) {
-          return res.status(400).json({ error: 'Missing token' });
+        if (!token || !userId) {
+          return res.status(400).json({ error: 'Missing token or userId' });
+        }
+
+        // Store the token in the database
+        const { error } = await supabase
+          .from('user_tokens')
+          .upsert([{ user_id: userId, token }], { onConflict: 'user_id' });
+
+        if (error) {
+          console.error('Error storing token:', error);
+          return res.status(500).json({ error: 'Failed to store token' });
         }
 
         // Extract subdomain from origin

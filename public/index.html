@@ -330,7 +330,23 @@
     </svg>
   </button>
 
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js"></script>
   <script>
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyBQJQJQJQJQJQJQJQJQJQJQJQJQJQJQJ",
+      authDomain: "dhruvs-host.firebaseapp.com",
+      projectId: "dhruvs-host",
+      storageBucket: "dhruvs-host.appspot.com",
+      messagingSenderId: "1234567890",
+      appId: "1:1234567890:web:abcdefghijklmnopqrstuv"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const messaging = firebase.messaging();
+
     // Check if user is logged in
     const username = localStorage.getItem('username');
     if (!username) {
@@ -354,14 +370,19 @@
         if (response.ok) {
           const data = await response.json();
           localStorage.setItem('username', data.user.username);
+          localStorage.setItem('userId', data.user.id);
           document.getElementById('login-container').style.display = 'none';
           currentUser = data.user.username;
+          currentUserId = data.user.id;
           loadGroups();
 
           // Check if notifications are supported and prompt user
           if ('Notification' in window) {
             if (Notification.permission !== 'granted') {
               document.getElementById('notification-prompt').style.display = 'block';
+            } else {
+              // If permission is already granted, subscribe to notifications
+              subscribeToNotifications();
             }
           }
 
@@ -377,8 +398,53 @@
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
           document.getElementById('notification-prompt').style.display = 'none';
-          // You can now use the Notifications API
+          // Subscribe to notifications
+          subscribeToNotifications();
         }
+      }
+    });
+
+    // Subscribe to notifications
+    async function subscribeToNotifications() {
+      try {
+        const token = await messaging.getToken();
+        console.log('Token:', token);
+
+        // Send token to server
+        const response = await fetch('/subscribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Origin': window.location.origin
+          },
+          body: JSON.stringify({ token, userId: currentUserId })
+        });
+
+        if (response.ok) {
+          console.log('Successfully subscribed to notifications!');
+        } else {
+          console.error('Failed to subscribe to notifications:', await response.text());
+        }
+      } catch (err) {
+        console.error('Error subscribing to notifications:', err);
+      }
+    }
+
+    // Handle incoming messages
+    messaging.onMessage((payload) => {
+      console.log('Message received. ', payload);
+      // Customize notification here
+      const notificationTitle = payload.notification.title;
+      const notificationOptions = {
+        body: payload.notification.body,
+        icon: payload.notification.icon || '/icons/icon-192x192.png'
+      };
+
+      new Notification(notificationTitle, notificationOptions);
+
+      // If the message is for the current group, refresh messages
+      if (payload.data && payload.data.groupId && currentGroup === parseInt(payload.data.groupId)) {
+        loadMessages(currentGroup);
       }
     });
 
@@ -402,6 +468,7 @@
     const sendButton = document.getElementById('send-button');
 
     let currentUser = localStorage.getItem('username') || '';
+    let currentUserId = localStorage.getItem('userId') || null;
     let currentGroup = null;
     let lastMessageId = null;
     let pollingInterval = null;
@@ -581,6 +648,9 @@
       if ('Notification' in window) {
         if (Notification.permission !== 'granted') {
           document.getElementById('notification-prompt').style.display = 'block';
+        } else {
+          // If permission is already granted, subscribe to notifications
+          subscribeToNotifications();
         }
       }
 
