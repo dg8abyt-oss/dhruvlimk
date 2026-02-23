@@ -8,15 +8,7 @@
   ],
   "routes": [
     {
-      "src": "/sign-up",
-      "dest": "api/index.js"
-    },
-    {
-      "src": "/send",
-      "dest": "api/index.js"
-    },
-    {
-      "src": "/subscribe",
+      "src": "/(.*)",
       "dest": "api/index.js"
     }
   ]
