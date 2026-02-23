@@ -1,25 +1,25 @@
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js');
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBQJQJQJQJQJQJQJQJQJQJQJQJQJQJQJ",
-  authDomain: "dhruvs-host.firebaseapp.com",
-  projectId: "dhruvs-host",
-  storageBucket: "dhruvs-host.appspot.com",
-  messagingSenderId: "1234567890",
-  appId: "1:1234567890:web:abcdefghijklmnopqrstuv"
-};
+firebase.initializeApp({
+  apiKey: "AIzaSyAccxtHdhMmMaYLesbRRGrXgzgM8I74uYU",
+  projectId: "appex-ca05f",
+  messagingSenderId: "251243500031",
+  appId: "1:251243500031:web:a031fe6c3f580e641117ca"
+});
 
-firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
-
-messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw.js] Received background message ', payload);
-  const notificationTitle = payload.notification.title;
-  const notificationOptions = {
-    body: payload.notification.body,
-    icon: payload.notification.icon || '/icons/icon-192x192.png'
-  };
-
-  self.registration.showNotification(notificationTitle, notificationOptions);
+messaging.onBackgroundMessage(async (payload) => {
+  let title = payload.notification.title;
+  let body = payload.notification.body;
+  let icon = payload.notification.image || "/default-icon.png";
+  try {
+    const res = await fetch('/gateway-config.js');
+    const text = await res.text();
+    const sMatch = text.match(/senderName:\s*["'](.+?)["']/);
+    const iMatch = text.match(/icon:\s*["'](.+?)["']/);
+    if (sMatch) title = `${sMatch[1]}: ${title}`;
+    if (iMatch && !payload.notification.image) icon = iMatch[1];
+  } catch (e) {}
+  return self.registration.showNotification(title, { body, icon });
 });
