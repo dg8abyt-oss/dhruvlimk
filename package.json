@@ -1,7 +1,7 @@
 {
-  "name": "modern-chat-app",
+  "name": "firebase-gateway",
   "version": "1.0.0",
-  "description": "A modern group chat application",
+  "description": "Firebase Cloud Messaging Gateway for dhruvs.host",
   "main": "api/index.js",
   "scripts": {
     "start": "node api/index.js"

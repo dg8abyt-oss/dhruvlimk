@@ -7,149 +7,115 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 module.exports = async (req, res) => {
-  if (req.url === '/' && req.method === 'GET') {
-    // Serve the index.html file
-    const filePath = path.join(__dirname, '../public/index.html');
+  // CORS headers
+  res.setHeader('Access-Control-Allow-Origin', 'https://*.dhruvs.host');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Origin');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method === 'GET' && req.url === '/sign-up') {
+    // Serve the sign-up script
+    const filePath = path.join(__dirname, '../public/sign-up.js');
     fs.readFile(filePath, 'utf8', (err, data) => {
       if (err) {
-        console.error('Error reading index.html:', err);
+        console.error('Error reading sign-up.js:', err);
         res.writeHead(500, { 'Content-Type': 'text/plain' });
         res.end('Internal Server Error');
       } else {
-        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.writeHead(200, { 'Content-Type': 'application/javascript' });
         res.end(data);
       }
     });
-  } else if (req.method === 'POST' && req.url === '/api') {
-    const { message, sender, groupId } = req.body;
-
-    // Save message to Supabase
-    const { data, error } = await supabase
-      .from('messages')
-      .insert([{ message, sender, group_id: groupId }]);
-
-    if (error) {
-      return res.status(500).json({ error: error.message });
+  } else if (req.method === 'POST' && req.url === '/send') {
+    // Check CORS
+    const origin = req.headers.origin;
+    if (!origin || !origin.match(/^https:\/\/[a-zA-Z0-9-]+\.dhruvs\.host$/)) {
+      return res.status(403).json({ error: 'Forbidden: Invalid origin' });
     }
 
-    // Send notification to group members
+    const { message_subject, message_body, icon, messenger_name } = req.body;
+
+    if (!message_subject || !message_body) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Extract subdomain from origin
+    const subdomain = origin.split('//')[1].split('.')[0];
+    const topic = `${subdomain}-dhruvs-host`;
+
+    // Send notification to topic
     try {
-      const response = await fetch('https://firebase-gateway.dhruvs.host/send', {
+      const response = await fetch('https://fcm.googleapis.com/fcm/send', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Origin': 'https://dhruvs.host'
+          'Authorization': `key=${process.env.FIREBASE_SERVER_KEY}`
         },
         body: JSON.stringify({
-          message_subject: `New message from ${sender}`,
-          message_body: message,
-          icon: '/icons/icon-192x192.png',
-          messenger_name: sender
+          to: `/topics/${topic}`,
+          notification: {
+            title: message_subject,
+            body: message_body,
+            icon: icon || '/icons/icon-192x192.png'
+          },
+          data: {
+            messenger_name: messenger_name || 'System'
+          }
         })
       });
 
       if (!response.ok) {
         console.error('Failed to send notification:', await response.text());
+        return res.status(500).json({ error: 'Failed to send notification' });
       }
+
+      return res.status(200).json({ success: true });
     } catch (err) {
       console.error('Error sending notification:', err);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  } else if (req.method === 'POST' && req.url === '/subscribe') {
+    // Check CORS
+    const origin = req.headers.origin;
+    if (!origin || !origin.match(/^https:\/\/[a-zA-Z0-9-]+\.dhruvs\.host$/)) {
+      return res.status(403).json({ error: 'Forbidden: Invalid origin' });
     }
 
-    return res.status(200).json({ data });
-  } else if (req.method === 'GET' && req.url.startsWith('/api?groupId=')) {
-    const urlParams = new URLSearchParams(req.url.split('?')[1]);
-    const groupId = urlParams.get('groupId');
-    const lastId = urlParams.get('lastId');
+    const { token } = req.body;
 
-    let query = supabase
-      .from('messages')
-      .select('*')
-      .eq('group_id', groupId)
-      .order('created_at', { ascending: true });
-
-    if (lastId) {
-      query = query.gt('id', lastId);
+    if (!token) {
+      return res.status(400).json({ error: 'Missing token' });
     }
 
-    const { data, error } = await query;
+    // Extract subdomain from origin
+    const subdomain = origin.split('//')[1].split('.')[0];
+    const topic = `${subdomain}-dhruvs-host`;
 
-    if (error) {
-      return res.status(500).json({ error: error.message });
-    }
-
-    return res.status(200).json({ data });
-  } else if (req.method === 'PUT' && req.url === '/api') {
-    const { username, oldUsername } = req.body;
-
-    // Check if user exists
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('username', username)
-      .single();
-
-    if (userError && userError.code !== 'PGRST116') {
-      return res.status(500).json({ error: userError.message });
-    }
-
-    // If user doesn't exist, create them
-    if (!userData) {
-      const { data: newUser, error: createError } = await supabase
-        .from('users')
-        .insert([{ username }])
-        .single();
-
-      if (createError) {
-        return res.status(500).json({ error: createError.message });
-      }
-
-      // If oldUsername is provided, merge accounts
-      if (oldUsername) {
-        const { data: oldUser, error: oldUserError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('username', oldUsername)
-          .single();
-
-        if (!oldUserError && oldUser) {
-          // Update messages with old username to new username
-          const { error: updateError } = await supabase
-            .from('messages')
-            .update({ sender: username })
-            .eq('sender', oldUsername);
-
-          if (updateError) {
-            console.error('Error updating messages:', updateError);
-          }
-
-          // Delete old user
-          const { error: deleteError } = await supabase
-            .from('users')
-            .delete()
-            .eq('id', oldUser.id);
-
-          if (deleteError) {
-            console.error('Error deleting old user:', deleteError);
-          }
+    // Subscribe token to topic
+    try {
+      const response = await fetch('https://iid.googleapis.com/iid/v1/' + token + '/rel/topics/' + topic, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `key=${process.env.FIREBASE_SERVER_KEY}`
         }
+      });
+
+      if (!response.ok) {
+        console.error('Failed to subscribe token:', await response.text());
+        return res.status(500).json({ error: 'Failed to subscribe token' });
       }
 
-      return res.status(200).json({ user: newUser });
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('Error subscribing token:', err);
+      return res.status(500).json({ error: 'Internal server error' });
     }
-
-    return res.status(200).json({ user: userData });
-  } else if (req.method === 'GET' && req.url === '/api?type=groups') {
-    const { data, error } = await supabase
-      .from('groups')
-      .select('*');
-
-    if (error) {
-      return res.status(500).json({ error: error.message });
-    }
-
-    return res.status(200).json({ data });
   } else {
-    res.setHeader('Allow', ['POST', 'GET', 'PUT']);
+    res.setHeader('Allow', ['GET', 'POST', 'OPTIONS']);
     res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 };
