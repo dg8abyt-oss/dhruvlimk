@@ -32,15 +32,46 @@ module.exports = async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
+    // Send notification to group members
+    try {
+      const response = await fetch('https://firebase-gateway.dhruvs.host/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': 'https://dhruvs.host'
+        },
+        body: JSON.stringify({
+          message_subject: `New message from ${sender}`,
+          message_body: message,
+          icon: '/icons/icon-192x192.png',
+          messenger_name: sender
+        })
+      });
+
+      if (!response.ok) {
+        console.error('Failed to send notification:', await response.text());
+      }
+    } catch (err) {
+      console.error('Error sending notification:', err);
+    }
+
     return res.status(200).json({ data });
   } else if (req.method === 'GET' && req.url.startsWith('/api?groupId=')) {
-    const groupId = req.url.split('=')[1];
+    const urlParams = new URLSearchParams(req.url.split('?')[1]);
+    const groupId = urlParams.get('groupId');
+    const lastId = urlParams.get('lastId');
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('messages')
       .select('*')
       .eq('group_id', groupId)
       .order('created_at', { ascending: true });
+
+    if (lastId) {
+      query = query.gt('id', lastId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       return res.status(500).json({ error: error.message });
