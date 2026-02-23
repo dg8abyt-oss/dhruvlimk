@@ -48,7 +48,7 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({ data });
   } else if (req.method === 'PUT' && req.url === '/api') {
-    const { username } = req.body;
+    const { username, oldUsername } = req.body;
 
     // Check if user exists
     const { data: userData, error: userError } = await supabase
@@ -70,6 +70,37 @@ module.exports = async (req, res) => {
 
       if (createError) {
         return res.status(500).json({ error: createError.message });
+      }
+
+      // If oldUsername is provided, merge accounts
+      if (oldUsername) {
+        const { data: oldUser, error: oldUserError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('username', oldUsername)
+          .single();
+
+        if (!oldUserError && oldUser) {
+          // Update messages with old username to new username
+          const { error: updateError } = await supabase
+            .from('messages')
+            .update({ sender: username })
+            .eq('sender', oldUsername);
+
+          if (updateError) {
+            console.error('Error updating messages:', updateError);
+          }
+
+          // Delete old user
+          const { error: deleteError } = await supabase
+            .from('users')
+            .delete()
+            .eq('id', oldUser.id);
+
+          if (deleteError) {
+            console.error('Error deleting old user:', deleteError);
+          }
+        }
       }
 
       return res.status(200).json({ user: newUser });

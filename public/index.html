@@ -239,12 +239,13 @@
       const usernameInput = document.getElementById('username-input').value;
       if (usernameInput.trim() !== '') {
         // Check if user exists or create them
+        const oldUsername = localStorage.getItem('username');
         const response = await fetch('/api', {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ username: usernameInput })
+          body: JSON.stringify({ username: usernameInput, oldUsername })
         });
 
         if (response.ok) {
