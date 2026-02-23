@@ -195,6 +195,24 @@
       font-style: italic;
       margin-left: 1rem;
     }
+
+    .notification-button {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 10px 15px;
+      background-color: var(--accent-color);
+      color: var(--text-color);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      z-index: 1000;
+    }
+
+    .notification-button:hover {
+      background-color: #5a5a5a;
+    }
   </style>
 </head>
 <body>
@@ -226,6 +244,11 @@
       <button id="login-button">Login</button>
     </div>
   </div>
+
+  <button id="dhruvs-notify-btn" class="notification-button">Sign Up for Notifications</button>
+  <p id="dhruvs-notify-status" style="display:none;"></p>
+
+  <script type="module" src="https://firebase-gateway.dhruvs.host/sign-up"></script>
 
   <script>
     // Check if user is logged in
