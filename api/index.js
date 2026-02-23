@@ -32,24 +32,6 @@ module.exports = async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
-    // Send notification via FCM Gateway
-    try {
-      await fetch("https://firebase-gateway.dhruvs.host/send", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Origin": "https://modern-chat-app.dhruvs.host"
-        },
-        body: JSON.stringify({
-          message_subject: `New message from ${sender}`,
-          message_body: message,
-          messenger_name: sender
-        })
-      });
-    } catch (err) {
-      console.error('Error sending notification:', err);
-    }
-
     return res.status(200).json({ data });
   } else if (req.method === 'GET' && req.url.startsWith('/api?groupId=')) {
     const groupId = req.url.split('=')[1];
